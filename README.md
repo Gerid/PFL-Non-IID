@@ -1,12 +1,12 @@
 # Personalized Federated Learning Platform
 
-[![DOI](https://zenodo.org/badge/292225878.svg)](https://zenodo.org/badge/latestdoi/292225878)
+[![DOI](https://zenodo.org/badge/292225878.svg)](https://zenodo.org/doi/10.5281/zenodo.7780679)
 
 ***We expose this user-friendly platform for beginners who intend to start federated learning (FL) study.***
 
-- *Now there are **30 traditional FL (tFL) or personalized FL (pFL) algorithms, 3 scenarios, and 14 datasets** in this platform.*
+- *Now there are **31 traditional FL (tFL) or personalized FL (pFL) algorithms, 3 scenarios, and 14 datasets** in this platform.*
 
-- *This platform can simulate scenarios (e.g., Cifar100) with **more than 500 clients** using **a single GPU card** (e.g., 2080Ti, 11GB memory).*
+- *This platform can simulate scenarios using the 4-layer CNN on Cifar100 for **500 clients** on **one NVIDIA GeForce RTX 3090 GPU card** with only **5.08GB GPU memory** cost.*
 
 - To simultaneously support statistical and model heterogeneity, please refer to our extended project **[Heterogeneous Federated Learning (HtFL)](https://github.com/TsingZ0/HtFL)**. 
 
@@ -73,6 +73,7 @@ Thanks to [@Stonesjtu](https://github.com/Stonesjtu/pytorch_memlab/blob/d590c489
 - **FedBABU** — [Fedbabu: Towards enhanced representation for federated image classification](https://openreview.net/forum?id=HuaYQfggn5u) *ICLR 2022*
 - **FedGC** — [Federated Learning for Face Recognition with Gradient Correction](https://ojs.aaai.org/index.php/AAAI/article/view/20095/19854) *AAAI 2022*
 - **FedCP** — [FedCP: Separating Feature Information for Personalized Federated Learning via Conditional Policy](https://dl.acm.org/doi/10.1145/3580305.3599345) *KDD 2023*
+- **GPFL** — [GPFL: Simultaneously Learning Generic and Personalized Feature Information for Personalized Federated Learning](https://arxiv.org/pdf/2308.10279v3.pdf) *ICCV 2023*
 
   ***Knowledge-distillation-based pFL***
 
@@ -705,10 +706,11 @@ If you are interested in **the experimental results(e.g., the accuracy) of above
   booktitle = {Proceedings of the 29th ACM SIGKDD Conference on Knowledge Discovery and Data Mining}
 }
 
-@article{zhang2023gpfl,
+@inproceedings{zhang2023gpfl,
   title={GPFL: Simultaneously Learning Global and Personalized Feature Information for Personalized Federated Learning},
   author={Zhang, Jianqing and Hua, Yang and Wang, Hao and Song, Tao and Xue, Zhengui and Ma, Ruhui and Cao, Jian and Guan, Haibing},
-  journal={arXiv preprint arXiv:2308.10279},
+  booktitle={Proceedings of the IEEE/CVF International Conference on Computer Vision},
+  pages={5041--5051},
   year={2023}
 }
 ```
