@@ -16,35 +16,40 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 import time
-import numpy as np
-from flcore.clients.clientpcl import clientPCL
+import torch
+import torch.nn as nn
+from flcore.clients.clientgh import clientGH
 from flcore.servers.serverbase import Server
 from threading import Thread
-from collections import defaultdict
+from torch.utils.data import DataLoader
 
 
-class FedPCL(Server):
+class FedGH(Server):
     def __init__(self, args, times):
         super().__init__(args, times)
+        self.global_model = None
 
         # select slow clients
         self.set_slow_clients()
-        self.set_clients(clientPCL)
+        self.set_clients(clientGH)
 
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print("Finished creating server and clients.")
 
         # self.load_model()
         self.Budget = []
-        self.num_classes = args.num_classes
-        self.global_protos = [None for _ in range(args.num_classes)]
-        self.client_protos_set = [None for _ in range(self.num_clients)]
+        self.CEloss = nn.CrossEntropyLoss()
+        self.server_learning_rate = args.server_learning_rate
+
+        self.head = self.clients[0].model.head
+        self.opt_h = torch.optim.SGD(self.head.parameters(), lr=self.server_learning_rate)
 
 
     def train(self):
         for i in range(self.global_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
+            self.send_models()
 
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
@@ -53,6 +58,7 @@ class FedPCL(Server):
 
             for client in self.selected_clients:
                 client.train()
+                client.collect_protos()
 
             # threads = [Thread(target=client.train)
             #            for client in self.selected_clients]
@@ -60,12 +66,10 @@ class FedPCL(Server):
             # [t.join() for t in threads]
 
             self.receive_protos()
-            self.global_protos = proto_aggregation(self.uploaded_protos)
-            self.prototype_padding()
-            self.send_protos()
+            self.train_head()
 
             self.Budget.append(time.time() - s_t)
-            print('-'*50, self.Budget[-1])
+            print('-'*25, 'time cost', '-'*25, self.Budget[-1])
 
             if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
                 break
@@ -74,18 +78,19 @@ class FedPCL(Server):
         # self.print_(max(self.rs_test_acc), max(
         #     self.rs_train_acc), min(self.rs_train_loss))
         print(max(self.rs_test_acc))
+        print("\nAverage time cost per round.")
         print(sum(self.Budget[1:])/len(self.Budget[1:]))
 
         self.save_results()
-        
 
-    def send_protos(self):
+
+    def send_models(self):
         assert (len(self.clients) > 0)
 
         for client in self.clients:
             start_time = time.time()
-
-            client.set_protos(self.global_protos, self.client_protos_set)
+            
+            client.set_parameters(self.head)
 
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
@@ -97,56 +102,16 @@ class FedPCL(Server):
         self.uploaded_protos = []
         for client in self.selected_clients:
             self.uploaded_ids.append(client.id)
-            self.uploaded_protos.append(client.protos)
-            self.client_protos_set[client.id] = client.protos
-
-    def evaluate(self, acc=None, loss=None):
-        stats = self.test_metrics()
-        stats_train = self.train_metrics()
-
-        test_acc = sum(stats[2])*1.0 / sum(stats[1])
-        train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
-        accs = [a / n for a, n in zip(stats[2], stats[1])]
-        
-        if acc == None:
-            self.rs_test_acc.append(test_acc)
-        else:
-            acc.append(test_acc)
-        
-        if loss == None:
-            self.rs_train_loss.append(train_loss)
-        else:
-            loss.append(train_loss)
-
-        print("Averaged Train Loss: {:.4f}".format(train_loss))
-        print("Averaged Test Accurancy: {:.4f}".format(test_acc))
-        # self.print_(test_acc, train_acc, train_loss)
-        print("Std Test Accurancy: {:.4f}".format(np.std(accs)))
-
-    def prototype_padding(self):
-        for cid in range(self.num_clients):
-            if self.client_protos_set[cid] is None:
-                self.client_protos_set[cid] = self.global_protos
-            else:
-                for k in range(self.num_classes):
-                    if type(self.client_protos_set[cid][k]) == type([]):
-                        self.client_protos_set[cid][k] = self.global_protos[k]
+            for cc in client.protos.keys():
+                y = torch.tensor(cc, dtype=torch.int64, device=self.device)
+                self.uploaded_protos.append((client.protos[cc], y))
             
+    def train_head(self):
+        proto_loader = DataLoader(self.uploaded_protos, self.batch_size, drop_last=False, shuffle=True)
 
-# https://github.com/yuetan031/FedPCL/blob/main/lib/utils.py#L1193
-def proto_aggregation(local_protos_list):
-    agg_protos_label = defaultdict(list)
-    for local_protos in local_protos_list:
-        for label in local_protos.keys():
-            agg_protos_label[label].append(local_protos[label])
-
-    for [label, proto_list] in agg_protos_label.items():
-        if len(proto_list) > 1:
-            proto = 0 * proto_list[0].data
-            for i in proto_list:
-                proto += i.data
-            agg_protos_label[label] = proto / len(proto_list)
-        else:
-            agg_protos_label[label] = proto_list[0].data
-
-    return agg_protos_label
+        for p, y in proto_loader:
+            out = self.head(p)
+            loss = self.CEloss(out, y)
+            self.opt_h.zero_grad()
+            loss.backward()
+            self.opt_h.step()

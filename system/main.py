@@ -1,3 +1,20 @@
+# PFLlib: Personalized Federated Learning Algorithm Library
+# Copyright (C) 2021  Jianqing Zhang
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #!/usr/bin/env python
 import copy
 import torch
@@ -40,6 +57,10 @@ from flcore.servers.serverfml import FML
 from flcore.servers.serverkd import FedKD
 from flcore.servers.serverpcl import FedPCL
 from flcore.servers.servercp import FedCP
+from flcore.servers.servergpfl import GPFL
+from flcore.servers.serverntd import FedNTD
+from flcore.servers.servergh import FedGH
+from flcore.servers.serveravgDBE import FedAvgDBE
 
 from flcore.trainmodel.models import *
 
@@ -112,6 +133,12 @@ def run(args):
             # args.model.fc = nn.Linear(feature_dim, args.num_classes).to(args.device)
             
             # args.model = resnet18(num_classes=args.num_classes, has_bn=True, bn_block_num=4).to(args.device)
+        
+        elif model_str == "resnet10":
+            args.model = resnet10(num_classes=args.num_classes).to(args.device)
+        
+        elif model_str == "resnet34":
+            args.model = torchvision.models.resnet34(pretrained=False, num_classes=args.num_classes).to(args.device)
 
         elif model_str == "alexnet":
             args.model = alexnet(pretrained=False, num_classes=args.num_classes).to(args.device)
@@ -303,6 +330,27 @@ def run(args):
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
             server = FedCP(args, i)
+
+        elif args.algorithm == "GPFL":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = GPFL(args, i)
+
+        elif args.algorithm == "FedNTD":
+            server = FedNTD(args, i)
+
+        elif args.algorithm == "FedGH":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = FedGH(args, i)
+
+        elif args.algorithm == "FedAvgDBE":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = FedAvgDBE(args, i)
             
         else:
             raise NotImplementedError
@@ -348,7 +396,7 @@ if __name__ == "__main__":
                         help="Ratio of clients per round")
     parser.add_argument('-rjr', "--random_join_ratio", type=bool, default=False,
                         help="Random ratio of clients per round")
-    parser.add_argument('-nc', "--num_clients", type=int, default=2,
+    parser.add_argument('-nc', "--num_clients", type=int, default=20,
                         help="Total number of clients")
     parser.add_argument('-pv', "--prev", type=int, default=0,
                         help="Previous Running times")
@@ -365,7 +413,7 @@ if __name__ == "__main__":
     parser.add_argument('-dlgg', "--dlg_gap", type=int, default=100)
     parser.add_argument('-bnpc', "--batch_num_per_client", type=int, default=2)
     parser.add_argument('-nnc', "--num_new_clients", type=int, default=0)
-    parser.add_argument('-fte', "--fine_tuning_epoch", type=int, default=0)
+    parser.add_argument('-ften', "--fine_tuning_epoch_new", type=int, default=0)
     # practical
     parser.add_argument('-cdr', "--client_drop_rate", type=float, default=0.0,
                         help="Rate for clients that train but drop out")
@@ -377,14 +425,11 @@ if __name__ == "__main__":
                         help="Whether to group and select clients at each round according to time cost")
     parser.add_argument('-tth', "--time_threthold", type=float, default=10000,
                         help="The threthold for droping slow clients")
-    # pFedMe / PerAvg / FedProx / FedAMP / FedPHP
-    parser.add_argument('-bt', "--beta", type=float, default=0.0,
-                        help="Average moving parameter for pFedMe, Second learning rate of Per-FedAvg, \
-                        or L1 regularization weight of FedTransfer")
+    # pFedMe / PerAvg / FedProx / FedAMP / FedPHP / GPFL
+    parser.add_argument('-bt', "--beta", type=float, default=0.0)
     parser.add_argument('-lam', "--lamda", type=float, default=1.0,
                         help="Regularization weight")
-    parser.add_argument('-mu', "--mu", type=float, default=0,
-                        help="Proximal rate for FedProx")
+    parser.add_argument('-mu', "--mu", type=float, default=0.0)
     parser.add_argument('-K', "--K", type=int, default=5,
                         help="Number of personalized training steps for pFedMe")
     parser.add_argument('-lrp', "--p_learning_rate", type=float, default=0.01,
@@ -402,11 +447,11 @@ if __name__ == "__main__":
     # APFL
     parser.add_argument('-al', "--alpha", type=float, default=1.0)
     # Ditto / FedRep
-    parser.add_argument('-pls', "--plocal_steps", type=int, default=1)
+    parser.add_argument('-pls', "--plocal_epochs", type=int, default=1)
     # MOON
     parser.add_argument('-tau', "--tau", type=float, default=1.0)
     # FedBABU
-    parser.add_argument('-fts', "--fine_tuning_steps", type=int, default=10)
+    parser.add_argument('-fte', "--fine_tuning_epochs", type=int, default=10)
     # APPLE
     parser.add_argument('-dlr', "--dr_learning_rate", type=float, default=0.0)
     parser.add_argument('-L', "--L", type=float, default=1.0)
@@ -416,7 +461,7 @@ if __name__ == "__main__":
     parser.add_argument('-hd', "--hidden_dim", type=int, default=512)
     parser.add_argument('-se', "--server_epochs", type=int, default=1000)
     parser.add_argument('-lf', "--localize_feature_extractor", type=bool, default=False)
-    # SCAFFOLD
+    # SCAFFOLD / FedGH
     parser.add_argument('-slr', "--server_learning_rate", type=float, default=1.0)
     # FedALA
     parser.add_argument('-et', "--eta", type=float, default=1.0)
@@ -427,6 +472,9 @@ if __name__ == "__main__":
     parser.add_argument('-mlr', "--mentee_learning_rate", type=float, default=0.005)
     parser.add_argument('-Ts', "--T_start", type=float, default=0.95)
     parser.add_argument('-Te', "--T_end", type=float, default=0.98)
+    # FedAvgDBE
+    parser.add_argument('-mo', "--momentum", type=float, default=0.1)
+    parser.add_argument('-klw', "--kl_weight", type=float, default=0.0)
 
 
     args = parser.parse_args()
@@ -441,7 +489,7 @@ if __name__ == "__main__":
 
     print("Algorithm: {}".format(args.algorithm))
     print("Local batch size: {}".format(args.batch_size))
-    print("Local steps: {}".format(args.local_epochs))
+    print("Local epochs: {}".format(args.local_epochs))
     print("Local learing rate: {}".format(args.local_learning_rate))
     print("Local learing rate decay: {}".format(args.learning_rate_decay))
     if args.learning_rate_decay:
@@ -470,7 +518,7 @@ if __name__ == "__main__":
     if args.dlg_eval:
         print("DLG attack round gap: {}".format(args.dlg_gap))
     print("Total number of new clients: {}".format(args.num_new_clients))
-    print("Fine tuning epoches on new clients: {}".format(args.fine_tuning_epoch))
+    print("Fine tuning epoches on new clients: {}".format(args.fine_tuning_epoch_new))
     print("=" * 50)
 
 

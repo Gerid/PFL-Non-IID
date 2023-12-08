@@ -1,3 +1,20 @@
+# PFLlib: Personalized Federated Learning Algorithm Library
+# Copyright (C) 2021  Jianqing Zhang
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 import copy
 import torch
 import torch.nn as nn
@@ -5,7 +22,6 @@ import numpy as np
 import time
 import torch.nn.functional as F
 from flcore.clients.clientbase import Client
-from utils.privacy import *
 
 
 class clientFML(Client):
@@ -29,18 +45,13 @@ class clientFML(Client):
         # self.model.to(self.device)
         self.model.train()
 
-        # differential privacy
-        if self.privacy:
-            self.global_model, self.optimizer, trainloader, privacy_engine = \
-                initialize_dp(self.global_model, self.optimizer, trainloader, self.dp_sigma)
-        
         start_time = time.time()
 
         max_local_epochs = self.local_epochs
         if self.train_slow:
             max_local_epochs = np.random.randint(1, max_local_epochs // 2)
 
-        for step in range(max_local_epochs):
+        for epoch in range(max_local_epochs):
             for i, (x, y) in enumerate(trainloader):
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
@@ -72,10 +83,6 @@ class clientFML(Client):
 
         self.train_time_cost['num_rounds'] += 1
         self.train_time_cost['total_cost'] += time.time() - start_time
-
-        if self.privacy:
-            eps, DELTA = get_dp_params(privacy_engine)
-            print(f"Client {self.id}", f"epsilon = {eps:.2f}, sigma = {DELTA}")
         
     def set_parameters(self, global_model):
         for new_param, old_param in zip(global_model.parameters(), self.global_model.parameters()):

@@ -1,3 +1,20 @@
+# PFLlib: Personalized Federated Learning Algorithm Library
+# Copyright (C) 2021  Jianqing Zhang
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 import torch
 import os
 import numpy as np
@@ -5,7 +22,6 @@ import h5py
 import copy
 import time
 import random
-
 from utils.data_utils import read_client_data
 from utils.dlg import DLG
 
@@ -61,7 +77,7 @@ class Server(object):
         self.num_new_clients = args.num_new_clients
         self.new_clients = []
         self.eval_new_clients = False
-        self.fine_tuning_epoch = args.fine_tuning_epoch
+        self.fine_tuning_epoch_new = args.fine_tuning_epoch_new
 
     def set_clients(self, clientObj):
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
@@ -341,7 +357,7 @@ class Server(object):
             CEloss = torch.nn.CrossEntropyLoss()
             trainloader = client.load_train_data()
             client.model.train()
-            for e in range(self.fine_tuning_epoch):
+            for e in range(self.fine_tuning_epoch_new):
                 for i, (x, y) in enumerate(trainloader):
                     if type(x) == type([]):
                         x[0] = x[0].to(client.device)

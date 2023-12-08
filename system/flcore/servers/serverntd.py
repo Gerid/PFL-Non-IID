@@ -15,20 +15,19 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-import numpy as np
 import time
-from flcore.clients.clientditto import clientDitto
+from flcore.clients.clientntd import clientNTD
 from flcore.servers.serverbase import Server
 from threading import Thread
 
 
-class Ditto(Server):
+class FedNTD(Server):
     def __init__(self, args, times):
         super().__init__(args, times)
 
         # select slow clients
         self.set_slow_clients()
-        self.set_clients(clientDitto)
+        self.set_clients(clientNTD)
 
         print(f"\nJoin ratio / total clients: {self.join_ratio} / {self.num_clients}")
         print("Finished creating server and clients.")
@@ -45,15 +44,10 @@ class Ditto(Server):
 
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
-                print("\nEvaluate global models")
+                print("\nEvaluate global model")
                 self.evaluate()
 
-            if i%self.eval_gap == 0:
-                print("\nEvaluate personalized models")
-                self.evaluate_personalized()
-
             for client in self.selected_clients:
-                client.ptrain()
                 client.train()
 
             # threads = [Thread(target=client.train)
@@ -84,69 +78,11 @@ class Ditto(Server):
 
         if self.num_new_clients > 0:
             self.eval_new_clients = True
-            self.set_new_clients(clientDitto)
+            self.set_new_clients(clientNTD)
             print(f"\n-------------Fine tuning round-------------")
             print("\nEvaluate new clients")
             self.evaluate()
 
-
-    def test_metrics_personalized(self):
-        if self.eval_new_clients and self.num_new_clients > 0:
-            self.fine_tuning_new_clients()
-            return self.test_metrics_new_clients()
-        
-        num_samples = []
-        tot_correct = []
-        tot_auc = []
-        for c in self.clients:
-            ct, ns, auc = c.test_metrics_personalized()
-            tot_correct.append(ct*1.0)
-            tot_auc.append(auc*ns)
-            num_samples.append(ns)
-
-        ids = [c.id for c in self.clients]
-
-        return ids, num_samples, tot_correct, tot_auc
-
-    def train_metrics_personalized(self):
-        if self.eval_new_clients and self.num_new_clients > 0:
-            return [0], [1], [0]
-        
-        num_samples = []
-        losses = []
-        for c in self.clients:
-            cl, ns = c.train_metrics_personalized()
-            num_samples.append(ns)
-            losses.append(cl*1.0)
-
-        ids = [c.id for c in self.clients]
-
-        return ids, num_samples, losses
-
-    # evaluate selected clients
-    def evaluate_personalized(self, acc=None, loss=None):
-        stats = self.test_metrics_personalized()
-        stats_train = self.train_metrics_personalized()
-
-        test_acc = sum(stats[2])*1.0 / sum(stats[1])
-        test_auc = sum(stats[3])*1.0 / sum(stats[1])
-        train_loss = sum(stats_train[2])*1.0 / sum(stats_train[1])
-        accs = [a / n for a, n in zip(stats[2], stats[1])]
-        aucs = [a / n for a, n in zip(stats[3], stats[1])]
-        
-        if acc == None:
-            self.rs_test_acc.append(test_acc)
-        else:
-            acc.append(test_acc)
-        
-        if loss == None:
-            self.rs_train_loss.append(train_loss)
-        else:
-            loss.append(train_loss)
-
-        print("Averaged Train Loss: {:.4f}".format(train_loss))
-        print("Averaged Test Accurancy: {:.4f}".format(test_acc))
-        print("Averaged Test AUC: {:.4f}".format(test_auc))
-        # self.print_(test_acc, train_acc, train_loss)
-        print("Std Test Accurancy: {:.4f}".format(np.std(accs)))
-        print("Std Test AUC: {:.4f}".format(np.std(aucs)))
+    def add_parameters(self, _, client_model):
+        for server_param, client_param in zip(self.global_model.parameters(), client_model.parameters()):
+            server_param.data += client_param.data.clone() / self.num_join_clients

@@ -1,3 +1,20 @@
+# PFLlib: Personalized Federated Learning Algorithm Library
+# Copyright (C) 2021  Jianqing Zhang
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 import os
 import ujson
 import numpy as np
@@ -6,7 +23,7 @@ from sklearn.model_selection import train_test_split
 
 batch_size = 10
 train_size = 0.75 # merge original training set and test set, then split it manually. 
-least_samples = batch_size / (1-train_size) # least samples for each client
+least_samples = 1 # guarantee that each client must have at least one samples for testing. 
 alpha = 0.1 # for Dirichlet distribution
 
 def check(config_path, train_path, test_path, num_clients, num_classes, niid=False, 
@@ -34,7 +51,7 @@ def check(config_path, train_path, test_path, num_clients, num_classes, niid=Fal
 
     return False
 
-def separate_data(data, num_clients, num_classes, niid=False, balance=False, partition=None, class_per_client=2):
+def separate_data(data, num_clients, num_classes, niid=False, balance=False, partition=None, class_per_client=None):
     X = [[] for _ in range(num_clients)]
     y = [[] for _ in range(num_clients)]
     statistic = [[] for _ in range(num_clients)]
@@ -59,7 +76,7 @@ def separate_data(data, num_clients, num_classes, niid=False, balance=False, par
             for client in range(num_clients):
                 if class_num_per_client[client] > 0:
                     selected_clients.append(client)
-                selected_clients = selected_clients[:int(np.ceil((num_clients/num_classes)*class_per_client))]
+            selected_clients = selected_clients[:int(np.ceil((num_clients/num_classes)*class_per_client))]
 
             num_all_samples = len(idx_for_each_class[i])
             num_selected_clients = len(selected_clients)
@@ -85,7 +102,11 @@ def separate_data(data, num_clients, num_classes, niid=False, balance=False, par
         K = num_classes
         N = len(dataset_label)
 
-        while min_size < num_classes:
+        try_cnt = 1
+        while min_size < least_samples:
+            if try_cnt > 1:
+                print(f'Client data size does not meet the minimum requirement {least_samples}. Try allocating again for the {try_cnt}-th time.')
+
             idx_batch = [[] for _ in range(num_clients)]
             for k in range(K):
                 idx_k = np.where(dataset_label == k)[0]
@@ -96,6 +117,7 @@ def separate_data(data, num_clients, num_classes, niid=False, balance=False, par
                 proportions = (np.cumsum(proportions)*len(idx_k)).astype(int)[:-1]
                 idx_batch = [idx_j + idx.tolist() for idx_j,idx in zip(idx_batch,np.split(idx_k,proportions))]
                 min_size = min([len(idx_j) for idx_j in idx_batch])
+            try_cnt += 1
 
         for j in range(num_clients):
             dataidx_map[j] = idx_batch[j]
