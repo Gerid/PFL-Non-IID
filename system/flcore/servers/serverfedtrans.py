@@ -180,13 +180,11 @@ class FedTrans(Server):
         #compute similarity k-means
         client_emb_list = [client.emb_vec.data.clone().reshape(1, -1) for client in self.clients]
         client_emb_list = torch.cat(client_emb_list, dim=0)
-        
-        cluster_res = kmeans(X=client_emb_list, num_clusters=self.num_cluster, distance='euclidean',iter_limit=200, device=self.device)
 
         if reform:
             self.clusters = [Cluster(c_id, self.global_model) for c_id in range(self.num_cluster)]
 
-        for client_id, cluster_id  in enumerate(cluster_res[0]):
+        for client_id, cluster_id in enumerate(cluster_res[0]):
            self.clusters[cluster_id].clients.append(self.clients[client_id])
 
         self.active_clusters = []
@@ -194,7 +192,13 @@ class FedTrans(Server):
             if(len(cluster.clients)>0):
                 self.active_clusters.append(cluster)
         
-            #cluster.per_layer is the centroid per_model for clients within cluster
+        client_features = self.compute_client_features()
+
+        #cluster_res = kmeans(X=client_emb_list, num_clusters=self.num_cluster, distance='euclidean',iter_limit=200, device=self.device)
+        cluster_res = self.dynamic_clustering(client_features)
+
+        
+        #cluster.per_layer is the centroid per_model for clients within cluster
 
     def attn_optimize(self):
         #loss = 0
@@ -369,3 +373,4 @@ class Attn_Model(nn.Module):
         #scores = torch.matmul(q, k.transpose(-2, -1)) / (self.attn_dim ** 0.5)
         attention_weights = torch.softmax(scores, dim=-1)
         return attention_weights
+
