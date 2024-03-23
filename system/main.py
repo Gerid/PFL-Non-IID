@@ -41,6 +41,7 @@ from flcore.servers.serverkd import FedKD
 from flcore.servers.serverpcl import FedPCL
 from flcore.servers.servercp import FedCP
 from flcore.servers.servergpfl import GPFL
+from flcore.servers.serverdca import FedDCA
 
 from flcore.trainmodel.models import *
 
@@ -310,6 +311,12 @@ def run(args):
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
             server = GPFL(args, i)
+
+        elif args.algorithm == "FedDCA":
+            args.head = copy.deepcopy(args.model.fc)
+            args.model.fc = nn.Identity()
+            args.model = BaseHeadSplit(args.model, args.head)
+            server = FedDCA(args, i)
             
         else:
             raise NotImplementedError
@@ -436,6 +443,9 @@ if __name__ == "__main__":
     parser.add_argument('-Te', "--T_end", type=float, default=0.98)
     # GPFL
     parser.add_argument('-lamr', "--lamda_reg", type=float, default=0.0)
+
+    # FedDCA
+    parser.add_argument('-encpath', "--autoencoder_model_path", type=str, default="/enc_path")
 
 
     args = parser.parse_args()
