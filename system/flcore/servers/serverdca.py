@@ -6,6 +6,7 @@ from flcore.servers.serverbase import Server
 from threading import Thread
 import torch
 import torch.nn as nn
+import numpy as np
 
 from sklearn.cluster import Birch
 
@@ -32,11 +33,23 @@ class FedDCA(Server):
         self.mse_criterion = nn.MSELoss()  # Using Mean Squared Error loss for reconstruction
         self.autoencoder_optimizer = torch.optim.Adam(self.autoencoder.parameters(), lr=args.autoencoder_lr)
 
-    def autoencoder_train(self, client, args=None):
-        data = client.intermediate_output
+        self.client_clusters = np.zeros(self.num_clients, dtype=int)
+        self.cluster_models = {}  # Maps clusters to models
+
+    def collect_intermediate_representations(self):
+        # Collect intermediate representations from all clients
+        all_intermediate_reps = []
+        for client in self.selected_clients:
+            all_intermediate_reps.append(client.intermediate_outputs)  # Assuming this attribute exists
+        # Calculate the average of intermediate representations
+        avg_intermediate_rep = np.mean(all_intermediate_reps, axis=0)
+        return torch.tensor(avg_intermediate_rep, dtype=torch.float).to(self.device)
+
+    def autoencoder_train(self, args=None):
+        avg_intermediate_rep = self.collect_intermediate_representations()
         self.autoencoder_optimizer.zero_grad()
-        _, decoded = self.autoencoder(data)
-        loss = self.mse_criterion(decoded, data)
+        _, decoded = self.autoencoder(avg_intermediate_rep.unsqueeze(0))
+        loss = self.mse_criterion(decoded, avg_intermediate_rep.unsqueeze(0))
         loss.backward()
         self.autoencoder_optimizer.step()
 
@@ -45,9 +58,16 @@ class FedDCA(Server):
         birch_model = Birch(n_clusters=None)
         birch_model.fit(features)
         cluster_assignments = birch_model.predict(features)
+
+        # Assign or reassign models to clusters
+        for cluster_id in np.unique(self.client_clusters):
+            if cluster_id not in self.cluster_models:
+                self.cluster_models[cluster_id] = self.allocate_new_model()  # Allocate new model for the cluster
         return cluster_assignments
 
+
     def pretrain_model(self):
+        self.pretrain_rounds=50
         for i in range(self.pretrain_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
@@ -59,7 +79,7 @@ class FedDCA(Server):
                 self.evaluate()
 
             for client in self.selected_clients:
-                client.pre_train()
+                client.pretrain()
                 self.autoencoder_train(client)
 
             self.receive_models()
@@ -95,8 +115,7 @@ class FedDCA(Server):
             self.evaluate()
 
     def train(self):
-        if self.args.pretrain_autoencoder:
-            self.pretrain_train()
+        self.pretrain_train()
             
         for i in range(self.global_rounds+1):
             s_t = time.time()
@@ -148,6 +167,20 @@ class FedDCA(Server):
             print(f"\n-------------Fine tuning round-------------")
             print("\nEvaluate new clients")
             self.evaluate()
+
+
+    def send_models(self):
+        assert (len(self.clients) > 0)
+
+        for client in self.clients:
+            start_time = time.time()
+
+            cluster_id = self.client_clusters[client.id]
+            
+            client.set_parameters(self.cluster_models[cluster_id]) # Assign model from client's cluster
+
+            client.send_time_cost['num_rounds'] += 1
+            client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
 
     def receive_models(self):
         assert (len(self.selected_clients) > 0)

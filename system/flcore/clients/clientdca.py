@@ -21,6 +21,7 @@ class clientDCA(Client):
         self.catch_intermediate_output = False
         self.intermediate_output = None
         self.intermediate_outputs = [] 
+        self.drift_interval = 20
 
         self.KL = nn.KLDivLoss()
 
@@ -42,6 +43,10 @@ class clientDCA(Client):
         else:
             self.intermediate_output = None   
         
+    def simulate_concept_drift(self):
+        # Example method to change data distribution or switch datasets
+        if self.current_round % self.drift_interval == 0:
+            self.dataset = self.get_next_drifted_dataset()
 
     def pretrain(self):
         trainloader = self.load_train_data()
@@ -84,9 +89,6 @@ class clientDCA(Client):
 
         # self.model.cpu()
 
-        # 计算中间表征的平均值
-        if self.catch_intermediate_output:
-            self.calculate_intermediate_output_average()
 
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
