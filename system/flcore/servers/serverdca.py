@@ -9,6 +9,7 @@ import torch.nn as nn
 import numpy as np
 
 from sklearn.cluster import Birch
+from sklearn.metrics import silhouette_score, davies_bouldin_score
 
 class FedDCA(Server):
     def __init__(self, args, times):
@@ -65,6 +66,8 @@ class FedDCA(Server):
         return silhouette_avg, db_index
 
     def adjust_clusters(self):
+        SILHOUETTE_THRESHOLD = 0.5  # Example threshold, adjust based on empirical results
+        DB_INDEX_THRESHOLD = 1.5  # Example threshold, adjust based on empirical results
         silhouette_avg, db_index = self.evaluate_cluster_quality()
 
         # 设定阈值来决定是否需要调整聚类
@@ -73,9 +76,6 @@ class FedDCA(Server):
             self.dynamic_clustering()
 
     def dynamic_clustering(self):
-        # 实现根据当前数据重新聚类的逻辑
-        # 这可能包括使用Birch算法或其他聚类算法
-        # 根据重新聚类的结果更新self.client_clusters和self.cluster_models
 
         features = [self.autoencoder.encode(client.intermediate_output).detach().numpy() for client in self.selected_clients]
         birch_model = Birch(n_clusters=None).fit(features)
@@ -93,7 +93,7 @@ class FedDCA(Server):
         unique_clusters = np.unique(new_cluster_assignments)
         for cluster_id in unique_clusters:
             if cluster_id not in self.cluster_models:
-                self.cluster_models[cluster_id] = copy.deepcopy(self.model)
+                self.cluster_models[cluster_id] = copy.deepcopy(self.global_model)
 
     def pretrain_model(self):
         self.pretrain_rounds=50
@@ -144,9 +144,10 @@ class FedDCA(Server):
             self.evaluate()
 
     def distribute_models_to_clusters(self):
-        for client in self.selected_clients:
+        for client in self.clients:
             cluster_id = self.client_clusters[client.id]  # 假设每个客户端知道自己属于哪个集群
             client.set_parameters(self.cluster_models[cluster_id].state_dict())  # 将集群的模型分配给客户端
+            # error: cluster_models初始化
 
 
     def train(self):
@@ -253,7 +254,7 @@ class FedDCA(Server):
         for client in self.selected_clients:
             client_model = client.get_parameters()
             cluster_id = self.client_clusters[client.id]
-            self.cluster_models[cluster_id].load_state_dict(client_model)
+            self.cluster_models[cluster_id].append(client_model)
 
     def receive_models(self):
         assert (len(self.selected_clients) > 0)
@@ -284,40 +285,7 @@ class FedDCA(Server):
         for client_model in self.uploaded_models:
             self.add_parameters(1/len(self.uploaded_models), client_model)
 
-    def aggregate_within_clusters(self):
-        # Assume self.clusters is a list of Cluster objects,
-        # and each Cluster object has a list of client models (client_models)
-        # and potentially weights associated with each client model.
-
-        for cluster in self.clusters:  # Loop through each cluster
-            cluster_model_aggregated = copy.deepcopy(cluster.client_models[0])
-            for param in cluster_model_aggregated.parameters():
-                param.data.zero_()
-
-            total_weight = 0
-            for client_model in cluster.client_models:
-                weight = 1  # Or some other weighting criteria
-                total_weight += weight
-            
-                for agg_param, client_param in zip(cluster_model_aggregated.parameters(), client_model.parameters()):
-                    agg_param.data += weight * client_param.data
-
-            # Average the aggregated model parameters for the cluster
-            for param in cluster_model_aggregated.parameters():
-                param.data /= total_weight
-
-            # Optionally, update the global model or each client's model within the cluster with this aggregated model
-            # For updating the global model, you might directly set self.global_model = cluster_model_aggregated
-            # Or for updating each client model within the cluster, loop through each client and set their model parameters
-
-
-    # Assuming implementation of encode in Autoencoder is as follows:
-    def encode(self, x):
-        # Encode the input using the autoencoder's encoder
-        return self.autoencoder.encoder(x)
-
-    def should_recluster(last_loss, current_loss, threshold=0.1):
-        return abs(current_loss - last_loss) > threshold
+    
 
 # Definition of the Autoencoder class (assuming args contain necessary dimensions)
 class Autoencoder(nn.Module):
