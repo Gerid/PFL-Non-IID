@@ -53,18 +53,47 @@ class FedDCA(Server):
         loss.backward()
         self.autoencoder_optimizer.step()
 
-    def form_clusters(self, client_models):
-        features = [self.autoencoder.encode(client.intermediate_output) for client in client_models]
-        birch_model = Birch(n_clusters=None)
-        birch_model.fit(features)
-        cluster_assignments = birch_model.predict(features)
+    def evaluate_cluster_quality(self):
 
-        # Assign or reassign models to clusters
-        for cluster_id in np.unique(self.client_clusters):
+        # 假设features是所有客户端模型的特征向量的数组
+        features = [self.autoencoder.encode(client.intermediate_output).detach().numpy() for client in self.selected_clients]
+        cluster_labels = [self.client_clusters[client.id] for client in self.selected_clients]
+
+        silhouette_avg = silhouette_score(features, cluster_labels)
+        db_index = davies_bouldin_score(features, cluster_labels)
+
+        return silhouette_avg, db_index
+
+    def adjust_clusters(self):
+        silhouette_avg, db_index = self.evaluate_cluster_quality()
+
+        # 设定阈值来决定是否需要调整聚类
+        if silhouette_avg < SILHOUETTE_THRESHOLD or db_index > DB_INDEX_THRESHOLD:
+            # 需要重新聚类
+            self.dynamic_clustering()
+
+    def dynamic_clustering(self):
+        # 实现根据当前数据重新聚类的逻辑
+        # 这可能包括使用Birch算法或其他聚类算法
+        # 根据重新聚类的结果更新self.client_clusters和self.cluster_models
+
+        features = [self.autoencoder.encode(client.intermediate_output).detach().numpy() for client in self.selected_clients]
+        birch_model = Birch(n_clusters=None).fit(features)
+        new_cluster_assignments = birch_model.predict(features)
+
+        # 更新客户端的聚类分配
+        for i, client in enumerate(self.selected_clients):
+            self.client_clusters[client.id] = new_cluster_assignments[i]
+
+        # 根据新的聚类分配更新或创建聚类模型
+        self.update_cluster_models(new_cluster_assignments)
+
+    def update_cluster_models(self, new_cluster_assignments):
+        # 实现更新或创建聚类模型的逻辑
+        unique_clusters = np.unique(new_cluster_assignments)
+        for cluster_id in unique_clusters:
             if cluster_id not in self.cluster_models:
-                self.cluster_models[cluster_id] = self.allocate_new_model()  # Allocate new model for the cluster
-        return cluster_assignments
-
+                self.cluster_models[cluster_id] = copy.deepcopy(self.model)
 
     def pretrain_model(self):
         self.pretrain_rounds=50
@@ -109,18 +138,25 @@ class FedDCA(Server):
 
         if self.num_new_clients > 0:
             self.eval_new_clients = True
-            self.set_new_clients(clientDCA)#FML
+            self.set_new_clients(clientDCA)
             print(f"\n-------------Fine tuning round-------------")
             print("\nEvaluate new clients")
             self.evaluate()
 
+    def distribute_models_to_clusters(self):
+        for client in self.selected_clients:
+            cluster_id = self.client_clusters[client.id]  # 假设每个客户端知道自己属于哪个集群
+            client.set_parameters(self.cluster_models[cluster_id].state_dict())  # 将集群的模型分配给客户端
+
+
     def train(self):
-        self.pretrain_train()
+        self.pretrain_model()
             
         for i in range(self.global_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
-            self.send_models()
+            
+            self.distribute_models_to_clusters()
 
             if i%self.eval_gap == 0:
                 print(f"\n-------------Round number: {i}-------------")
@@ -131,19 +167,15 @@ class FedDCA(Server):
                 client.train()
 
             self.receive_models()
-            
+
             if round % self.every_recluster_eps == 0:
-                self.form_clusters(self.uploaded_models)
+                self.adjust_clusters()
 
-            # 聚类内的模型更新聚合
             self.aggregate_within_clusters()
-
-            # 全局模型更新
             self.aggregate_global_model()
 
             if self.dlg_eval and i%self.dlg_gap == 0:
                 self.call_dlg(i)
-            self.aggregate_parameters()
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])
@@ -181,6 +213,47 @@ class FedDCA(Server):
 
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
+
+    def aggregate_within_clusters(self):
+        # 集群内部模型的聚合
+        for cluster_id, model in self.cluster_models.items():
+            aggregated_params = None
+            count = 0
+            for client_id, client_cluster_id in enumerate(self.client_clusters):
+                if client_cluster_id == cluster_id:
+                    client_model = self.selected_clients[client_id].get_parameters()
+                    if aggregated_params is None:
+                        aggregated_params = client_model
+                    else:
+                        for param in aggregated_params:
+                            aggregated_params[param] += client_model[param]
+                    count += 1
+            if count > 0:
+                for param in aggregated_params:
+                    aggregated_params[param] /= count
+                self.cluster_models[cluster_id].load_state_dict(aggregated_params)
+
+    def aggregate_global_model(self):
+        # 全局模型的聚合
+        aggregated_params = None
+        cluster_count = len(self.cluster_models)
+        for model in self.cluster_models.values():
+            model_params = model.state_dict()
+            if aggregated_params is None:
+                aggregated_params = model_params
+            else:
+                for param in aggregated_params:
+                    aggregated_params[param] += model_params[param]
+        for param in aggregated_params:
+            aggregated_params[param] /= cluster_count
+        self.global_model.load_state_dict(aggregated_params)
+
+    def receive_models_from_clients(self):
+        # 从客户端接收更新的模型
+        for client in self.selected_clients:
+            client_model = client.get_parameters()
+            cluster_id = self.client_clusters[client.id]
+            self.cluster_models[cluster_id].load_state_dict(client_model)
 
     def receive_models(self):
         assert (len(self.selected_clients) > 0)

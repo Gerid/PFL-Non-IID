@@ -25,6 +25,12 @@ class clientDCA(Client):
 
         self.KL = nn.KLDivLoss()
 
+    def get_parameters(self):
+        parameters = {}
+        for name, param in self.model.state_dict().items():
+            parameters[name] = param.detach().cpu().numpy()  # 转换为numpy数组，以便于处理
+        return parameters
+
     def hook_fn(self, module, input, output):
         self.intermediate_outputs.append(output)
 
