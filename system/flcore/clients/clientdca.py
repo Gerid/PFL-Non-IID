@@ -12,13 +12,15 @@ class clientDCA(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
 
+        self.alpha = args.alpha
+        self.beta = args.beta
         self.global_model = copy.deepcopy(args.model)
         self.optimizer_g = torch.optim.SGD(self.global_model.parameters(), lr=self.learning_rate)
         self.learning_rate_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer_g, 
             gamma=args.learning_rate_decay_gamma
         )
-        self.catch_intermediate_output = False
+        self.catch_intermediate_output = True
         self.intermediate_output = None
         self.intermediate_outputs = [] 
         self.drift_interval = 20
@@ -35,8 +37,7 @@ class clientDCA(Client):
         self.intermediate_outputs.append(output)
 
     def register_hook(self):
-        # 假设我们希望捕获的层名为'feature_layer'
-        feature_layer = self.model._modules.get('fc')
+        feature_layer = self.global_model._modules.get('base')
         if feature_layer:
             feature_layer.register_forward_hook(self.hook_fn)
 

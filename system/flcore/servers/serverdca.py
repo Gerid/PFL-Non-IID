@@ -10,6 +10,7 @@ import numpy as np
 
 from sklearn.cluster import Birch
 from sklearn.metrics import silhouette_score, davies_bouldin_score
+from flcore.trainmodel.models import *
 
 class FedDCA(Server):
     def __init__(self, args, times):
@@ -24,13 +25,17 @@ class FedDCA(Server):
 
         args.pretrain_round = 50
         args.autoencoder_model_path = "/enc_path"
+        args.autoencoder_lr = 0.05
 
         # self.load_model()
         self.args = args
         # 初始化代码...
         # 加载自编码器模型
-        self.autoencoder = Autoencoder(args.input_size, args.encoding_dim).to(self.device)
-        self.autoencoder.load_state_dict(torch.load(args.autoencoder_model_path))
+        if isinstance(self.global_model.base, FedAvgCNN):
+            input_size = 512
+            self.autoencoder = Autoencoder(input_size=input_size).to(self.device)
+
+        #self.autoencoder.load_state_dict(torch.load(args.autoencoder_model_path))
         self.mse_criterion = nn.MSELoss()  # Using Mean Squared Error loss for reconstruction
         self.autoencoder_optimizer = torch.optim.Adam(self.autoencoder.parameters(), lr=args.autoencoder_lr)
 
@@ -167,7 +172,7 @@ class FedDCA(Server):
             for client in self.selected_clients:
                 client.train()
 
-            self.receive_models()
+            #self.receive_models()
 
             if round % self.every_recluster_eps == 0:
                 self.adjust_clusters()
@@ -207,10 +212,8 @@ class FedDCA(Server):
 
         for client in self.clients:
             start_time = time.time()
-
-            cluster_id = self.client_clusters[client.id]
             
-            client.set_parameters(self.cluster_models[cluster_id]) # Assign model from client's cluster
+            client.set_parameters(self.global_model)# Assign model from client's cluster
 
             client.send_time_cost['num_rounds'] += 1
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
@@ -222,7 +225,7 @@ class FedDCA(Server):
             count = 0
             for client_id, client_cluster_id in enumerate(self.client_clusters):
                 if client_cluster_id == cluster_id:
-                    client_model = self.selected_clients[client_id].get_parameters()
+                    client_model = self.clients[client_id].get_parameters()
                     if aggregated_params is None:
                         aggregated_params = client_model
                     else:
@@ -249,12 +252,6 @@ class FedDCA(Server):
             aggregated_params[param] /= cluster_count
         self.global_model.load_state_dict(aggregated_params)
 
-    def receive_models_from_clients(self):
-        # 从客户端接收更新的模型
-        for client in self.selected_clients:
-            client_model = client.get_parameters()
-            cluster_id = self.client_clusters[client.id]
-            self.cluster_models[cluster_id].append(client_model)
 
     def receive_models(self):
         assert (len(self.selected_clients) > 0)
@@ -290,19 +287,26 @@ class FedDCA(Server):
 # Definition of the Autoencoder class (assuming args contain necessary dimensions)
 class Autoencoder(nn.Module):
     # Autoencoder implementation
-    def __init__(self, args):
+    def __init__(self, input_size=128, encoding_dim=64):
         super(Autoencoder, self).__init__()
         # Encoder and decoder implementation
         self.encoder = nn.Sequential(
-            nn.Linear(args.in_features, args.hidden_size),
+            nn.Linear(input_size, 256),
             nn.ReLU(),
-            nn.Linear(args.hidden_size, args.encoding_dim))
+            nn.Linear(256, encoding_dim),
+        )
+
+        # 解码器部分
         self.decoder = nn.Sequential(
-            nn.Linear(args.encoding_dim, args.hidden_size),
+            nn.Linear(encoding_dim, 256),
             nn.ReLU(),
-            nn.Linear(args.hidden_size, args.in_features),
-            nn.Sigmoid())
+            nn.Linear(256, input_size),
+        )
+
     def forward(self, x):
-        x = self.encoder(x)
-        x = self.decoder(x)
-        return x
+        encoded = self.encoder(x)
+        decoded = self.decoder(x)
+        return decoded 
+
+    def encode(self, x):
+        return self.encoder(x)

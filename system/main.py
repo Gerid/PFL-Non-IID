@@ -33,7 +33,7 @@ from flcore.servers.servergen import FedGen
 from flcore.servers.serverscaffold import SCAFFOLD
 from flcore.servers.serverdistill import FedDistill
 from flcore.servers.serverala import FedALA
-from flcore.servers.serverpac import FedPAC
+#from flcore.servers.serverpac import FedPAC
 from flcore.servers.serverlg import LG_FedAvg
 from flcore.servers.servergc import FedGC
 from flcore.servers.serverfml import FML
@@ -269,11 +269,11 @@ def run(args):
         elif args.algorithm == "FedALA":
             server = FedALA(args, i)
 
-        elif args.algorithm == "FedPAC":
-            args.head = copy.deepcopy(args.model.fc)
-            args.model.fc = nn.Identity()
-            args.model = BaseHeadSplit(args.model, args.head)
-            server = FedPAC(args, i)
+        #elif args.algorithm == "FedPAC":
+            #args.head = copy.deepcopy(args.model.fc)
+            #args.model.fc = nn.Identity()
+            #args.model = BaseHeadSplit(args.model, args.head)
+            #server = FedPAC(args, i)
 
         elif args.algorithm == "LG-FedAvg":
             args.head = copy.deepcopy(args.model.fc)
