@@ -1,13 +1,13 @@
 {
     "version": "0.2.0",
     "configurations": [
-
+       
         {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "cwd":"${cwd}/system",
+            "cwd": "${cwd}/system",
             "console": "integratedTerminal",
             "justMyCode": true,
             /* "args": [
@@ -21,35 +21,28 @@
                 "-go", "cnn",
                 // "-nc", "20",
                 // "-ere", "20",
-            ] */ 
-            
+            ] */
             "args": [
-                "-data", "Cifar100",
-                "-m", "cnn",
-                "-algo", "FedDCA",
-                "-gr", "200",
-                "-lbs",  "4",
-                "-did", "0",
-                "-go", "cnn",
-                "-nb", "100",
-                "-nc", "20",
+                "-data",
+                "Cifar100",
+                "-m",
+                "cnn",
+                "-algo",
+                "FedDCA",
+                "-gr",
+                "200",
+                "-lbs",
+                "4",
+                "-did",
+                "0",
+                "-go",
+                "cnn",
+                "-nb",
+                "100",
+                "-nc",
+                "20",
             ]
-            /*"args": [
-                "-data", "Cifar10",
-                "-m", "dnn",
-                "-algo", "FedTrans",
-                "-gr", "500",
-                "-lbs",  "16",
-                "-did", "0",
-                "-go", "dnn",
-                "-nb", "10",
-                "-nc", "100",
-                "-ere", "1",
-                "-alk", "5e-3",
-                "-lam", "5e-7",
-                "-sg", "1e-1",
-                "-pretrain", "True",
-            ]*/
+         
         }
     ]
 }

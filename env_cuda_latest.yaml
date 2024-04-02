@@ -1,4 +1,4 @@
-name: fl
+name: fl_core
 channels:
   - pytorch
   - nvidia

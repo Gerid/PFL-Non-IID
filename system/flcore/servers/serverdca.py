@@ -27,6 +27,7 @@ class FedDCA(Server):
         args.pretrain_round = 50
         args.autoencoder_model_path = "/enc_path"
         args.autoencoder_lr = 0.05
+        self.cluster_inited = False
 
         # self.load_model()
         self.args = args
@@ -103,7 +104,7 @@ class FedDCA(Server):
                 self.cluster_models[cluster_id] = copy.deepcopy(self.global_model)
 
     def pretrain_model(self):
-        self.pretrain_rounds=50
+        self.pretrain_rounds=20
         for i in range(self.pretrain_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
@@ -131,17 +132,16 @@ class FedDCA(Server):
             
 
         # Save the trained autoencoder model
-        torch.save(self.autoencoder.state_dict(), self.args.autoencoder_model_path)
+        self.save_results()
+        self.save_pretrain_models()
 
         print("\nBest accuracy.")
         # self.print_(max(self.rs_test_acc), max(
         #     self.rs_train_acc), min(self.rs_train_loss))
         print(max(self.rs_test_acc))
         print("\nAverage time cost per round.")
-        print(sum(self.Budget[1:])/len(self.Budget[1:]))
+        #print(sum(self.Budget[1:])/len(self.Budget[1:]))
 
-        self.save_results()
-        self.save_global_model()
 
         if self.num_new_clients > 0:
             self.eval_new_clients = True
@@ -151,10 +151,16 @@ class FedDCA(Server):
             self.evaluate()
 
     def distribute_models_to_clusters(self):
-        for client in self.clients:
-            cluster_id = self.client_clusters[client.id]  # 假设每个客户端知道自己属于哪个集群
-            client.set_parameters(self.cluster_models[cluster_id].state_dict())  # 将集群的模型分配给客户端
-            # error: cluster_models初始化
+        if self.cluster_inited:
+            for client in self.clients:
+                cluster_id = self.client_clusters[client.id]  # 假设每个客户端知道自己属于哪个集群
+                client.set_parameters(self.cluster_models[cluster_id].state_dict())  # 将集群的模型分配给客户端
+                # error: cluster_models初始化
+        else:
+            for client in self.clients:
+                cluster_id = self.client_clusters[client.id]  # 假设每个客户端知道自己属于哪个集群
+                client.set_parameters(self.global_model.state_dict())  # 将集群的模型分配给客户端
+            
 
 
     def train(self):
@@ -182,6 +188,7 @@ class FedDCA(Server):
 
             if round % self.every_recluster_eps == 0:
                 self.adjust_clusters()
+                self.cluster_inited = True
 
             self.aggregate_within_clusters()
             self.aggregate_global_model()
@@ -223,9 +230,12 @@ class FedDCA(Server):
         pretrain_model_path = os.path.join("models", self.args.autoencoder_model_path)
         if not os.path.exists(pretrain_model_path):
             os.makedirs(pretrain_model_path)
-        pretrain_model_path = os.path.join(pretrain_model_path, self.algorithm + "_server_autoencoder" + ".pt")
-        torch.save(self.autoencoder.state_dict(), pretrain_model_path)
-        self.save_global_model()
+
+        pretrain_autoencoder_path = os.path.join(pretrain_model_path, self.algorithm + "_server_autoencoder" + ".pt")
+        model_path = os.path.join(pretrain_model_path, self.algorithm + "_server" + ".pt")
+
+        torch.save(self.autoencoder.state_dict(), pretrain_autoencoder_path)
+        torch.save(self.global_model.state_dict(), model_path)
 
 
     def send_models(self):
