@@ -1,4 +1,5 @@
 import copy
+import os
 import random
 import time
 from flcore.clients.clientdca import clientDCA
@@ -29,6 +30,7 @@ class FedDCA(Server):
 
         # self.load_model()
         self.args = args
+        self.args.load_pretrain = False 
         # 初始化代码...
         # 加载自编码器模型
         if isinstance(self.global_model.base, FedAvgCNN):
@@ -46,16 +48,16 @@ class FedDCA(Server):
         # Collect intermediate representations from all clients
         all_intermediate_reps = []
         for client in self.selected_clients:
-            all_intermediate_reps.append(client.intermediate_outputs)  # Assuming this attribute exists
+            all_intermediate_reps.append(client.intermediate_output)  # Assuming this attribute exists
         # Calculate the average of intermediate representations
         avg_intermediate_rep = np.mean(all_intermediate_reps, axis=0)
         return torch.tensor(avg_intermediate_rep, dtype=torch.float).to(self.device)
 
-    def autoencoder_train(self, args=None):
-        avg_intermediate_rep = self.collect_intermediate_representations()
+    def autoencoder_train(self, client):
+        #avg_intermediate_rep = self.collect_intermediate_representations()
         self.autoencoder_optimizer.zero_grad()
-        _, decoded = self.autoencoder(avg_intermediate_rep.unsqueeze(0))
-        loss = self.mse_criterion(decoded, avg_intermediate_rep.unsqueeze(0))
+        decoded = self.autoencoder(client.intermediate_output)
+        loss = self.mse_criterion(decoded, client.intermediate_output)
         loss.backward()
         self.autoencoder_optimizer.step()
 
@@ -113,7 +115,7 @@ class FedDCA(Server):
                 self.evaluate()
 
             for client in self.selected_clients:
-                client.pretrain()
+                client.train()
                 self.autoencoder_train(client)
 
             self.receive_models()
@@ -121,11 +123,11 @@ class FedDCA(Server):
                 self.call_dlg(i)
             self.aggregate_parameters()
 
-            self.Budget.append(time.time() - s_t)
-            print('-'*25, 'time cost', '-'*25, self.Budget[-1])
+            #self.Budget.append(time.time() - s_t)
+            #print('-'*25, 'time cost', '-'*25, self.Budget[-1])
 
-            if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
-                break
+            #if self.auto_break and self.check_done(acc_lss=[self.rs_test_acc], top_cnt=self.top_cnt):
+                #break
             
 
         # Save the trained autoencoder model
@@ -156,7 +158,11 @@ class FedDCA(Server):
 
 
     def train(self):
-        self.pretrain_model()
+
+        if self.args.load_pretrain:
+            self.load_pretrain_models()
+        else:
+            self.pretrain_model()
             
         for i in range(self.global_rounds+1):
             s_t = time.time()
@@ -197,7 +203,7 @@ class FedDCA(Server):
         print(sum(self.Budget[1:])/len(self.Budget[1:]))
 
         self.save_results()
-        self.save_global_model()
+        self.save_pretrain_models()
 
         if self.num_new_clients > 0:
             self.eval_new_clients = True
@@ -205,6 +211,21 @@ class FedDCA(Server):
             print(f"\n-------------Fine tuning round-------------")
             print("\nEvaluate new clients")
             self.evaluate()
+
+    def load_pretrain_models(self):
+        pretrain_model_path = os.path.join("models", self.args.autoencoder_model_path)
+        pretrain_model_path = os.path.join(pretrain_model_path, self.algorithm + "_server_autoencoder" + ".pt")
+        assert (os.path.exists(pretrain_model_path))
+        self.auto_encoder = torch.load(pretrain_model_path)
+        self.global_model = self.load_model()
+
+    def save_pretrain_models(self):
+        pretrain_model_path = os.path.join("models", self.args.autoencoder_model_path)
+        if not os.path.exists(pretrain_model_path):
+            os.makedirs(pretrain_model_path)
+        pretrain_model_path = os.path.join(pretrain_model_path, self.algorithm + "_server_autoencoder" + ".pt")
+        torch.save(self.autoencoder.state_dict(), pretrain_model_path)
+        self.save_global_model()
 
 
     def send_models(self):
@@ -305,7 +326,7 @@ class Autoencoder(nn.Module):
 
     def forward(self, x):
         encoded = self.encoder(x)
-        decoded = self.decoder(x)
+        decoded = self.decoder(encoded)
         return decoded 
 
     def encode(self, x):

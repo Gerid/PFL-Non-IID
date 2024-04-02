@@ -149,6 +149,8 @@ class Server(object):
         for server_param, client_param in zip(self.global_model.parameters(), client_model.parameters()):
             server_param.data += client_param.data.clone() * w
 
+
+
     def save_global_model(self):
         model_path = os.path.join("models", self.dataset)
         if not os.path.exists(model_path):

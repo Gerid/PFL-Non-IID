@@ -45,7 +45,7 @@ class clientDCA(Client):
         # 计算所有捕获的中间输出的平均值
         if self.intermediate_outputs:
             intermediate_output_avg = torch.mean(torch.stack(self.intermediate_outputs), 0)
-            self.intermediate_output = intermediate_output_avg
+            self.intermediate_output = intermediate_output_avg.clone().detach()
             self.intermediate_outputs = []  # 清空列表以便下一轮训练
         else:
             self.intermediate_output = None   
