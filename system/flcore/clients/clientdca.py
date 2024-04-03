@@ -39,7 +39,7 @@ class clientDCA(Client):
     def register_hook(self):
         feature_layer = self.global_model._modules.get('base')
         if feature_layer:
-            feature_layer.register_forward_hook(self.hook_fn)
+            return feature_layer.register_forward_hook(self.hook_fn)
 
     def calculate_intermediate_output_average(self):
         # 计算所有捕获的中间输出的平均值
@@ -55,65 +55,13 @@ class clientDCA(Client):
         if self.current_round % self.drift_interval == 0:
             self.dataset = self.get_next_drifted_dataset()
 
-    def pretrain(self):
-        trainloader = self.load_train_data()
-        # self.model.to(self.device)
-        self.model.train()
-
-        if self.catch_intermediate_output:
-            self.register_hook()
-
-        start_time = time.time()
-
-        max_local_epochs = self.local_epochs
-        if self.train_slow:
-            max_local_epochs = np.random.randint(1, max_local_epochs // 2)
-
-
-        for step in range(max_local_epochs):
-            for i, (x, y) in enumerate(trainloader):
-                if type(x) == type([]):
-                    x[0] = x[0].to(self.device)
-                else:
-                    x = x.to(self.device)
-                y = y.to(self.device)
-                if self.train_slow:
-                    time.sleep(0.1 * np.abs(np.random.rand()))
-                output = self.model(x)
-                output_g = self.global_model(x)
-                loss = self.loss(output, y) * self.alpha + self.KL(F.log_softmax(output, dim=1), F.softmax(output_g, dim=1)) * (1-self.alpha)
-                loss_g = self.loss(output_g, y) * self.beta + self.KL(F.log_softmax(output_g, dim=1), F.softmax(output, dim=1)) * (1-self.beta)
-
-                self.optimizer.zero_grad()
-                self.optimizer_g.zero_grad()
-                loss.backward(retain_graph=True)
-                loss_g.backward()
-                # prevent divergency on specifical tasks
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 10)
-                torch.nn.utils.clip_grad_norm_(self.global_model.parameters(), 10)
-                self.optimizer.step()
-                self.optimizer_g.step()
-
-        # self.model.cpu()
-
-
-        if self.learning_rate_decay:
-            self.learning_rate_scheduler.step()
-            self.learning_rate_scheduler_g.step()
-
-        self.train_time_cost['num_rounds'] += 1
-        self.train_time_cost['total_cost'] += time.time() - start_time
- 
-
-    
-
     def train(self):
         trainloader = self.load_train_data()
         # self.model.to(self.device)
         self.model.train()
 
         if self.catch_intermediate_output:
-            self.register_hook()
+            hook_handle = self.register_hook()
 
         start_time = time.time()
 
@@ -124,6 +72,8 @@ class clientDCA(Client):
 
         for step in range(max_local_epochs):
             for i, (x, y) in enumerate(trainloader):
+                if i == max_local_epochs:
+                    break
                 if type(x) == type([]):
                     x[0] = x[0].to(self.device)
                 else:
@@ -147,7 +97,8 @@ class clientDCA(Client):
                 self.optimizer_g.step()
 
         # self.model.cpu()
-
+        # 移除钩子
+        hook_handle.remove()
         # 计算中间表征的平均值
         if self.catch_intermediate_output:
             self.calculate_intermediate_output_average()

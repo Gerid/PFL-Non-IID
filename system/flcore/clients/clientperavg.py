@@ -35,6 +35,7 @@ class clientPerAvg(Client):
 
         for step in range(max_local_epochs):  # local update
             for X, Y in trainloader:
+
                 temp_model = copy.deepcopy(list(self.model.parameters()))
 
                 # step 1

@@ -104,7 +104,7 @@ class FedDCA(Server):
                 self.cluster_models[cluster_id] = copy.deepcopy(self.global_model)
 
     def pretrain_model(self):
-        self.pretrain_rounds=20
+        self.pretrain_rounds=1
         for i in range(self.pretrain_rounds+1):
             s_t = time.time()
             self.selected_clients = self.select_clients()
@@ -159,7 +159,7 @@ class FedDCA(Server):
         else:
             for client in self.clients:
                 cluster_id = self.client_clusters[client.id]  # 假设每个客户端知道自己属于哪个集群
-                client.set_parameters(self.global_model.state_dict())  # 将集群的模型分配给客户端
+                client.set_parameters(self.global_model)  # 将集群的模型分配给客户端
             
 
 
