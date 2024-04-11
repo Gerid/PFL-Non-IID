@@ -160,6 +160,17 @@ class FedDCA(Server):
             for client in self.clients:
                 cluster_id = self.client_clusters[client.id]  # 假设每个客户端知道自己属于哪个集群
                 client.set_parameters(self.global_model)  # 将集群的模型分配给客户端
+
+    # generate concept for dynamic clustering
+    def concept_generate(self):
+        cp_num = random.randint(self.args.max_concept_num)
+        for i in range(cp_num):
+            if self.dataset == "cifar100":
+                self.
+
+            random.randint(100)
+            self.cp = [] #self.cp should be a dict of {"origin_label":"map_label"}
+
             
 
 

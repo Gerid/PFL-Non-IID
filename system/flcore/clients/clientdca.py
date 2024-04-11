@@ -5,7 +5,11 @@ import numpy as np
 import time
 import torch.nn.functional as F
 
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader, Dataset
 from flcore.clients.clientbase import Client
+
+from utils.data_utils import read_client_data
 
 
 class clientDCA(Client):
@@ -169,4 +173,89 @@ class clientDCA(Client):
 
         return losses, train_num
 
+    def label_shift(epoch, total_epochs, label):
+    # 假设在前半段训练时，我们将标签0-4映射到标签0
+    # 在后半段训练时，我们将标签5-9映射到标签5
+        if epoch < total_epochs / 2:
+            if label < 5:
+                return 0
+            else:
+                return label
+        else:
+            if label < 10:
+                return 5
+            else:
+                return label
+
+
+    def generate_changepoint(self):
+        change_point_str = 'rand'
+        drift_together = 1
+        train_iteration = 10
+        stretch_factor = 5
+        num_client = 20
+
+        # Randomly generate a single change point for each clientI
+        if change_point_str == 'rand':
+            if drift_together == 1:
+                #cp = np.random.random_sample() * train_iteration
+                cp = np.random.randint(1, train_iteration//stretch_factor)
+                change_point_per_client = [cp for c in range(num_client)]
+            else:
+                change_point_per_client = [np.random.randint(1, train_iteration//stretch_factor)
+                                        for c in range(num_client)]
+        
+            # matrix of the concept in the training data for each time, client.
+            # restricted to concept changes at time step boundary
+            change_point = np.zeros((train_iteration//stretch_factor + 1, num_client))
+            for c in range(num_client):
+                t = change_point_per_client[c]
+                change_point[t:,c] = 1
+            #np.savetxt("./../../../data/changepoints/rand.cp", change_point, fmt='%u')
+        return change_point
+
+    def load_train_data(self, batch_size=None):
+        if batch_size == None:
+            batch_size = self.batch_size
+        train_data = read_client_data(self.dataset, self.id, is_train=True)
+        train_data = CIFAR100DynamicLabel(train_data, label_shift_func=lambda label: self.label_shift(self.current_epoch, self.total_epochs, label))
+        
+        return super().load_train_data(batch_size)
+    
+    def shift_data(self, epoch, total_epochs, label):
+        #change_point = self.generate_changepoint()
+        if epoch < total_epochs / 2:
+            if label < 5:
+                return 0
+            else:
+                return label
+        else:
+            if label < 10:
+                return 5
+            else:
+                return label
+            
+        pass
+
+
+class CIFAR100DynamicLabel(Dataset):
+    def __init__(self, root, train=True, transform=None, target_transform=None, label_shift_func=None):
+        self.dataset = datasets.CIFAR100(root=root, train=train, download=True, transform=transform)
+        self.target_transform = target_transform
+        self.label_shift_func = label_shift_func
+    
+    def __getitem__(self, index):
+        img, label = self.dataset[index]
+        
+        # 应用标签转换
+        if self.label_shift_func is not None:
+            label = self.label_shift_func(label)
+        
+        if self.target_transform is not None:
+            label = self.target_transform(label)
+        
+        return img, label
+    
+    def __len__(self):
+        return len(self.dataset)
     

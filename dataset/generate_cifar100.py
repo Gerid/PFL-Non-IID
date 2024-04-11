@@ -5,6 +5,7 @@ import random
 import torch
 import torchvision
 import torchvision.transforms as transforms
+
 from utils.dataset_utils import check, separate_data, split_data, save_file
 
 
@@ -114,8 +115,9 @@ def generate_cifar100_with_drift(dir_path, num_clients, num_classes, niid, balan
     train_images, train_labels = next(iter(torch.utils.data.DataLoader(trainset, batch_size=len(trainset), shuffle=False)))
     test_images, test_labels = next(iter(torch.utils.data.DataLoader(testset, batch_size=len(testset), shuffle=False)))
 
+    cifar100 = Cifar100_Data()
 
-    mnist = MNIST_Data()
+    #mnist = MNIST_Data()
     for it in range(train_iteration + 1):
         for c in range(num_client):
             k = change_point[it//stretch_factor][c]

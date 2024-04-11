@@ -7,12 +7,13 @@ import torchvision
 import torchvision.transforms as transforms
 from utils.dataset_utils import check, separate_data, split_data, save_file
 
-
 random.seed(1)
 np.random.seed(1)
 num_clients = 20
 num_classes = 10
 dir_path = "Cifar10/"
+
+def 
 
 
 # Allocate data to users
