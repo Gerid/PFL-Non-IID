@@ -324,6 +324,14 @@ class FedDCA(Server):
         for client_model in self.uploaded_models:
             self.add_parameters(1/len(self.uploaded_models), client_model)
 
+
+    def prepare_data(self):
+        self.generate_concepts() # return concepts [cluster1(clients1,clients2,...), cluster2]
+        for i in enumerate(self.clients):
+
+
+            
+
     
 
 # Definition of the Autoencoder class (assuming args contain necessary dimensions)

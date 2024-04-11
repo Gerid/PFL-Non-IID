@@ -173,7 +173,8 @@ class clientDCA(Client):
 
         return losses, train_num
 
-    def label_shift(epoch, total_epochs, label):
+    # changepoint:(iterations)
+    def label_shift(changepoint, total_epochs, label):
     # 假设在前半段训练时，我们将标签0-4映射到标签0
     # 在后半段训练时，我们将标签5-9映射到标签5
         if epoch < total_epochs / 2:
@@ -218,24 +219,25 @@ class clientDCA(Client):
         if batch_size == None:
             batch_size = self.batch_size
         train_data = read_client_data(self.dataset, self.id, is_train=True)
-        train_data = CIFAR100DynamicLabel(train_data, label_shift_func=lambda label: self.label_shift(self.current_epoch, self.total_epochs, label))
+        train_data = CIFAR100DynamicLabel(train_data, label_shift_func=lambda label: self.shift_data(self.current_epoch, self.total_epochs, label))
         
         return super().load_train_data(batch_size)
     
-    def shift_data(self, epoch, total_epochs, label):
+    def shift_data(self, epoch, change_point, label_map):
+        if epoch >= change_point:
+            label = label_map[label]
         #change_point = self.generate_changepoint()
-        if epoch < total_epochs / 2:
-            if label < 5:
-                return 0
-            else:
-                return label
-        else:
-            if label < 10:
-                return 5
-            else:
-                return label
+        # if epoch < total_epochs / 2:
+        #     if label < 5 :
+        #         return 0
+        #     else:
+        #         return label
+        # else:
+        #     if label < 10:
+        #         return 5
+        #     else:
+        #         return label
             
-        pass
 
 
 class CIFAR100DynamicLabel(Dataset):
