@@ -324,10 +324,17 @@ class FedDCA(Server):
         for client_model in self.uploaded_models:
             self.add_parameters(1/len(self.uploaded_models), client_model)
 
+    def generate_concepts(self, num_concepts):
+        # 从服务器角度： i->整体轮数，num_concepts:随机变化,
+        for i in range(num_concepts):
+            randmap = permulate()
+
+        return concepts, label_map
 
     def prepare_data(self):
-        self.generate_concepts() # return concepts [cluster1(clients1,clients2,...), cluster2]
-        for i in enumerate(self.clients):
+        concepts, label_map = self.generate_concepts() # return concepts [cluster1(clients1,clients2,...), cluster2]
+        for c in enumerate(self.clients):
+            c.label_map = label_map
 
 
             
