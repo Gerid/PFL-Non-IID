@@ -37,10 +37,10 @@ class Client(object):
                 self.has_BatchNorm = True
                 break
 
-        self.train_slow = kwargs['train_slow']
-        self.send_slow = kwargs['send_slow']
-        self.train_time_cost = {'num_rounds': 0, 'total_cost': 0.0}
-        self.send_time_cost = {'num_rounds': 0, 'total_cost': 0.0}
+        self.train_slow = kwargs["train_slow"]
+        self.send_slow = kwargs["send_slow"]
+        self.train_time_cost = {"num_rounds": 0, "total_cost": 0.0}
+        self.send_time_cost = {"num_rounds": 0, "total_cost": 0.0}
 
         self.privacy = args.privacy
         self.dp_sigma = args.dp_sigma
@@ -48,11 +48,9 @@ class Client(object):
         self.loss = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
         self.learning_rate_scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            optimizer=self.optimizer, 
-            gamma=args.learning_rate_decay_gamma
+            optimizer=self.optimizer, gamma=args.learning_rate_decay_gamma
         )
         self.learning_rate_decay = args.learning_rate_decay
-
 
     def load_train_data(self, batch_size=None):
         if batch_size == None:
@@ -65,7 +63,7 @@ class Client(object):
             batch_size = self.batch_size
         test_data = read_client_data(self.dataset, self.id, is_train=False)
         return DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
-        
+
     def set_parameters(self, model):
         for new_param, old_param in zip(model.parameters(), self.model.parameters()):
             old_param.data = new_param.data.clone()
@@ -89,7 +87,7 @@ class Client(object):
         test_num = 0
         y_prob = []
         y_true = []
-        
+
         with torch.no_grad():
             for x, y in testloaderfull:
                 if type(x) == type([]):
@@ -117,8 +115,8 @@ class Client(object):
         y_prob = np.concatenate(y_prob, axis=0)
         y_true = np.concatenate(y_true, axis=0)
 
-        auc = metrics.roc_auc_score(y_true, y_prob, average='micro')
-        
+        auc = metrics.roc_auc_score(y_true, y_prob, average="micro")
+
         return test_acc, test_num, auc
 
     def train_metrics(self):
@@ -162,18 +160,22 @@ class Client(object):
 
     #     return x, y
 
-
     def save_item(self, item, item_name, item_path=None):
         if item_path == None:
             item_path = self.save_folder_name
         if not os.path.exists(item_path):
             os.makedirs(item_path)
-        torch.save(item, os.path.join(item_path, "client_" + str(self.id) + "_" + item_name + ".pt"))
+        torch.save(
+            item,
+            os.path.join(item_path, "client_" + str(self.id) + "_" + item_name + ".pt"),
+        )
 
     def load_item(self, item_name, item_path=None):
         if item_path == None:
             item_path = self.save_folder_name
-        return torch.load(os.path.join(item_path, "client_" + str(self.id) + "_" + item_name + ".pt"))
+        return torch.load(
+            os.path.join(item_path, "client_" + str(self.id) + "_" + item_name + ".pt")
+        )
 
     # @staticmethod
     # def model_exists():
