@@ -69,6 +69,18 @@ class FedDCA(Server):
         kantorovich_part = np.sum(p * (x[:, None] - x[None, :]) ** 2 * q)
         return np.sqrt(hellinger_part + kantorovich_part)
 
+    def detect_drift(self, client_id):
+        # Simple drift detection logic
+        current_features = self.client_features[client_id]
+        historical_features = self.client_features.get(client_id, None)
+        if (
+            historical_features
+            and self.hk_distance(current_features, historical_features)
+            > self.drift_threshold
+        ):
+            return True
+        return False
+
     def initialize_clusters(self):
         self.birch = Birch(
             threshold=self.args.threshold, branching_factor=self.args.branching_factor
@@ -107,17 +119,20 @@ class FedDCA(Server):
         return weighted_sum / total_data_points
 
     def update_global_model(self):
-        cluster_models = {}
-        for cluster_id in set(self.clusters):
-            cluster_clients = [
-                client
-                for client, cid in zip(self.clients, self.clusters)
-                if cid == cluster_id
-            ]
-            cluster_models[cluster_id] = self.aggregate_cluster_models(cluster_clients)
+        # Aggregate models based on clusters
+        cluster_models = {i: [] for i in set(self.clusters)}
+        for i, client in enumerate(self.clients):
+            cluster_id = self.clusters[i]
+            cluster_models[cluster_id].append(client.model)
 
-        # Aggregate cluster models to update the global model
-        self.global_model.update(np.mean(list(cluster_models.values()), axis=0))
+        for cluster_id, models in cluster_models.items():
+            if models:
+                self.cluster_centroids[cluster_id] = np.mean(
+                    [model.parameters() for model in models], axis=0
+                )
+
+        # Update the global model by averaging cluster centroids
+        self.global_model = np.mean(list(self.cluster_centroids), axis=0)
 
     def train(self):
         if self.args.concept_drift:
