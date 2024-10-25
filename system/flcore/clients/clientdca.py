@@ -27,7 +27,6 @@ class clientDCA(Client):
         self.intermediate_outputs = []
         self.drift_interval = 20
         self.drift_args = None
-
         self.KL = nn.KLDivLoss()
 
     def receive_cluster_model(self, cluster_model):
