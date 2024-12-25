@@ -25,7 +25,7 @@ class FedDCA(Server):
 
         self.cluster_models = {}  # Maps clusters to models
         self.drift_threshold = 0
-        self.clusters = np.zeros(len(self.clients))
+        self.clusters = np.zeros(len(self.clients), dtype=int)
         self.cluster_centroids = [copy.deepcopy(self.global_model)]
         self.client_features = {}
 

@@ -15,10 +15,11 @@ class clientFML(Client):
         self.beta = args.beta
 
         self.global_model = copy.deepcopy(args.model)
-        self.optimizer_g = torch.optim.SGD(self.global_model.parameters(), lr=self.learning_rate)
+        self.optimizer_g = torch.optim.SGD(
+            self.global_model.parameters(), lr=self.learning_rate
+        )
         self.learning_rate_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-            optimizer=self.optimizer_g, 
-            gamma=args.learning_rate_decay_gamma
+            optimizer=self.optimizer_g, gamma=args.learning_rate_decay_gamma
         )
 
         self.KL = nn.KLDivLoss()
@@ -45,8 +46,12 @@ class clientFML(Client):
                     time.sleep(0.1 * np.abs(np.random.rand()))
                 output = self.model(x)
                 output_g = self.global_model(x)
-                loss = self.loss(output, y) * self.alpha + self.KL(F.log_softmax(output, dim=1), F.softmax(output_g, dim=1)) * (1-self.alpha)
-                loss_g = self.loss(output_g, y) * self.beta + self.KL(F.log_softmax(output_g, dim=1), F.softmax(output, dim=1)) * (1-self.beta)
+                loss = self.loss(output, y) * self.alpha + self.KL(
+                    F.log_softmax(output, dim=1), F.softmax(output_g, dim=1)
+                ) * (1 - self.alpha)
+                loss_g = self.loss(output_g, y) * self.beta + self.KL(
+                    F.log_softmax(output_g, dim=1), F.softmax(output, dim=1)
+                ) * (1 - self.beta)
 
                 self.optimizer.zero_grad()
                 self.optimizer_g.zero_grad()
@@ -64,11 +69,13 @@ class clientFML(Client):
             self.learning_rate_scheduler.step()
             self.learning_rate_scheduler_g.step()
 
-        self.train_time_cost['num_rounds'] += 1
-        self.train_time_cost['total_cost'] += time.time() - start_time
-        
+        self.train_time_cost["num_rounds"] += 1
+        self.train_time_cost["total_cost"] += time.time() - start_time
+
     def set_parameters(self, global_model):
-        for new_param, old_param in zip(global_model.parameters(), self.global_model.parameters()):
+        for new_param, old_param in zip(
+            global_model.parameters(), self.global_model.parameters()
+        ):
             old_param.data = new_param.data.clone()
 
     def test_metrics(self):
@@ -79,7 +86,7 @@ class clientFML(Client):
 
         test_acc = 0
         test_num = 0
-        
+
         with torch.no_grad():
             for x, y in testloaderfull:
                 if type(x) == type([]):
@@ -91,7 +98,7 @@ class clientFML(Client):
 
                 test_acc += (torch.sum(torch.argmax(output, dim=1) == y)).item()
                 test_num += y.shape[0]
-        
+
         return test_acc, test_num, 0
 
     def train_metrics(self):
@@ -111,7 +118,9 @@ class clientFML(Client):
                 y = y.to(self.device)
                 output = self.model(x)
                 output_g = self.global_model(x)
-                loss = self.loss(output, y) * self.alpha + self.KL(F.log_softmax(output, dim=1), F.softmax(output_g, dim=1)) * (1-self.alpha)
+                loss = self.loss(output, y) * self.alpha + self.KL(
+                    F.log_softmax(output, dim=1), F.softmax(output_g, dim=1)
+                ) * (1 - self.alpha)
 
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]

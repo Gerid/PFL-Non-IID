@@ -19,9 +19,14 @@ class clientDCA(Client):
 
         self.alpha = args.alpha
         self.beta = args.beta
+        self.global_model = copy.deepcopy(args.model)
+        self.optimizer_g = torch.optim.SGD(
+            self.global_model.parameters(), lr=self.learning_rate
+        )
         self.learning_rate_scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
             optimizer=self.optimizer_g, gamma=args.learning_rate_decay_gamma
         )
+
         self.catch_intermediate_output = True
         self.intermediate_output = None
         self.intermediate_outputs = []
@@ -31,7 +36,7 @@ class clientDCA(Client):
 
     def receive_cluster_model(self, cluster_model):
         """Initialize the local model with the parameters of the cluster's centroid model."""
-        self.model.set_parameters(cluster_model)
+        self.set_parameters(cluster_model)
 
     def get_parameters(self):
         parameters = {}

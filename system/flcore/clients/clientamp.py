@@ -10,7 +10,7 @@ from flcore.clients.clientbase import Client
 class clientAMP(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
-        
+
         self.alphaK = args.alphaK
         self.lamda = args.lamda
         self.client_u = copy.deepcopy(self.model)
@@ -21,7 +21,7 @@ class clientAMP(Client):
 
         # self.model.to(self.device)
         self.model.train()
-        
+
         max_local_epochs = self.local_epochs
         if self.train_slow:
             max_local_epochs = np.random.randint(1, max_local_epochs // 2)
@@ -38,9 +38,13 @@ class clientAMP(Client):
                 output = self.model(x)
                 loss = self.loss(output, y)
 
-                gm = torch.cat([p.data.view(-1) for p in self.model.parameters()], dim=0)
-                pm = torch.cat([p.data.view(-1) for p in self.client_u.parameters()], dim=0)
-                loss += 0.5 * self.lamda/self.alphaK * torch.norm(gm-pm, p=2)
+                gm = torch.cat(
+                    [p.data.view(-1) for p in self.model.parameters()], dim=0
+                )
+                pm = torch.cat(
+                    [p.data.view(-1) for p in self.client_u.parameters()], dim=0
+                )
+                loss += 0.5 * self.lamda / self.alphaK * torch.norm(gm - pm, p=2)
 
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -51,14 +55,14 @@ class clientAMP(Client):
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
 
-        self.train_time_cost['num_rounds'] += 1
-        self.train_time_cost['total_cost'] += time.time() - start_time
-
+        self.train_time_cost["num_rounds"] += 1
+        self.train_time_cost["total_cost"] += time.time() - start_time
 
     def set_parameters(self, model, coef_self):
-        for new_param, old_param, self_param in zip(model.parameters(), self.client_u.parameters(), self.model.parameters()):
+        for new_param, old_param, self_param in zip(
+            model.parameters(), self.client_u.parameters(), self.model.parameters()
+        ):
             old_param.data = (new_param.data + coef_self * self_param.data).clone()
-
 
     def train_metrics(self, model=None):
         trainloader = self.load_train_data()
@@ -78,9 +82,13 @@ class clientAMP(Client):
                 output = self.model(x)
                 loss = self.loss(output, y)
 
-                gm = torch.cat([p.data.view(-1) for p in self.model.parameters()], dim=0)
-                pm = torch.cat([p.data.view(-1) for p in self.client_u.parameters()], dim=0)
-                loss += 0.5 * self.lamda/self.alphaK * torch.norm(gm-pm, p=2)
+                gm = torch.cat(
+                    [p.data.view(-1) for p in self.model.parameters()], dim=0
+                )
+                pm = torch.cat(
+                    [p.data.view(-1) for p in self.client_u.parameters()], dim=0
+                )
+                loss += 0.5 * self.lamda / self.alphaK * torch.norm(gm - pm, p=2)
 
                 train_num += y.shape[0]
                 losses += loss.item() * y.shape[0]
